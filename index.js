@@ -242,9 +242,16 @@ client.on('messageCreate', async (message) => {
 
   if (message.content.startsWith('!addfbp')) {
     try {
-      const allowedChannelId = process.env.ALLOWED_CHANNEL_ID
-      if (message.channel.id !== allowedChannelId) {
-        await message.reply('このコマンドは指定されたチャンネルでのみ使用できます。')
+      // チャンネル制限をコメントアウト
+      // const allowedChannelId = process.env.ALLOWED_CHANNEL_ID
+      // if (message.channel.id !== allowedChannelId) {
+      //   await message.reply('このコマンドは指定されたチャンネルでのみ使用できます。')
+      //   return
+      // }
+
+      // 管理者権限チェック
+      if (!message.member.permissions.has('Administrator')) {
+        await message.reply('このコマンドは管理者のみ使用できます。')
         return
       }
 
