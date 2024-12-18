@@ -5,15 +5,11 @@ const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle,
-  AttachmentBuilder
+  ButtonStyle
 } = require('discord.js')
 const { createClient } = require('@supabase/supabase-js')
-const path = require('path')
-require('dotenv').config()
-const fs = require('fs').promises
-
 const http = require('http')
+require('dotenv').config()
 
 // HTTPサーバーの設定
 const server = http.createServer((req, res) => {
@@ -39,21 +35,10 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message]
 })
 
-async function checkImageExists(imagePath) {
-  try {
-    await fs.access(imagePath)
-    return true
-  } catch {
-    return false
-  }
-}
-
 // データベース操作の関数
 async function getOrCreateUser(discordId) {
-  // ユーザー取得
   let { data: user } = await supabase.from('users').select('id, discord_id').eq('discord_id', discordId).single()
 
-  // ユーザーが存在しない場合は作成
   if (!user) {
     const { data: newUser, error: userError } = await supabase
       .from('users')
@@ -66,32 +51,63 @@ async function getOrCreateUser(discordId) {
 
     // ウォレット作成
     const { error: walletError } = await supabase.from('wallets').insert([{ user_id: user.id }])
-
     if (walletError) throw walletError
+
+    // ポイントウォレット作成
+    const { error: pointWalletError } = await supabase.from('point_wallets').insert([{ user_id: user.id }])
+    if (pointWalletError) throw pointWalletError
   }
 
   return user
 }
 
+async function getOrCreatePointWallet(userId) {
+  let { data: wallet } = await supabase.from('point_wallets').select('*').eq('user_id', userId).single()
+
+  if (!wallet) {
+    const { data: newWallet, error } = await supabase
+      .from('point_wallets')
+      .insert([{ user_id: userId, points: 0 }])
+      .select()
+      .single()
+
+    if (error) throw error
+    wallet = newWallet
+  }
+
+  return wallet
+}
+
 async function getUserInventory(userId) {
-  const { data: wallet } = await supabase.from('wallets').select('coins').eq('user_id', userId).single()
+  try {
+    // コインウォレット情報を取得
+    const { data: wallet } = await supabase.from('wallets').select('coins').eq('user_id', userId).single()
 
-  const { data: items } = await supabase
-    .from('user_items')
-    .select(
+    // ポイントウォレットを取得または作成
+    const { data: pointWallet } = await getOrCreatePointWallet(userId)
+
+    // アイテム情報を取得
+    const { data: items } = await supabase
+      .from('user_items')
+      .select(
+        `
+        quantity,
+        items (
+          name,
+          price
+        )
       `
-      quantity,
-      items (
-        name,
-        price
       )
-    `
-    )
-    .eq('user_id', userId)
+      .eq('user_id', userId)
 
-  return {
-    coins: wallet?.coins || 0,
-    items: items || []
+    return {
+      coins: wallet?.coins || 0,
+      points: pointWallet?.points || 0,
+      items: items || []
+    }
+  } catch (error) {
+    console.error('Error getting user inventory:', error)
+    throw error
   }
 }
 
@@ -99,7 +115,6 @@ async function getUserInventory(userId) {
 const processingPurchases = new Map()
 
 async function purchaseItem(userId, itemId) {
-  // 同じユーザーの同時購入を防ぐ
   const purchaseKey = `${userId}-${itemId}`
   if (processingPurchases.get(purchaseKey)) {
     return { success: false, message: '前回の購入処理が完了していません。少々お待ちください。' }
@@ -108,7 +123,6 @@ async function purchaseItem(userId, itemId) {
   processingPurchases.set(purchaseKey, true)
 
   try {
-    // アイテムの価格を取得
     const { data: item } = await supabase.from('items').select('id, name, price').eq('id', itemId).single()
 
     console.log('Purchasing item:', {
@@ -117,7 +131,6 @@ async function purchaseItem(userId, itemId) {
       itemPrice: item.price
     })
 
-    // ウォレット情報を取得
     const { data: wallet } = await supabase.from('wallets').select('coins').eq('user_id', userId).single()
 
     console.log('Current wallet:', {
@@ -130,7 +143,6 @@ async function purchaseItem(userId, itemId) {
       return { success: false, message: 'コインが不足しています' }
     }
 
-    // 現在のアイテム数を取得
     const { data: userItem } = await supabase
       .from('user_items')
       .select('quantity')
@@ -138,7 +150,6 @@ async function purchaseItem(userId, itemId) {
       .eq('item_id', itemId)
       .single()
 
-    // コインを減少（一度だけ）
     const { error: walletError, data: updatedWallet } = await supabase
       .from('wallets')
       .update({ coins: wallet.coins - item.price })
@@ -148,10 +159,8 @@ async function purchaseItem(userId, itemId) {
 
     if (walletError) throw walletError
 
-    // 新しい数量を計算（既存のアイテムがなければ1、あれば+1）
     const newQuantity = userItem ? userItem.quantity + 1 : 1
 
-    // アイテム数を更新
     const { error: itemError } = await supabase.from('user_items').upsert(
       {
         user_id: userId,
@@ -180,59 +189,45 @@ async function purchaseItem(userId, itemId) {
     console.error('Purchase error details:', error)
     throw error
   } finally {
-    // 処理完了後にフラグを解除
     processingPurchases.delete(purchaseKey)
   }
 }
 
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton()) return
+async function addPoints(userId, amount, grantedBy) {
+  const { data: wallet } = await getOrCreatePointWallet(userId)
 
-  try {
-    await interaction.deferReply({ ephemeral: true })
-
-    if (interaction.customId === 'show_inventory') {
-      const user = await getOrCreateUser(interaction.user.id)
-      const inventory = await getUserInventory(user.id)
-      const itemsList = inventory.items.map((item) => `${item.items.name}: ${item.quantity}個`).join('\n')
-
-      const inventoryEmbed = new EmbedBuilder()
-        .setTitle('🎒 インベントリ')
-        .setDescription(`💰 コイン: ${inventory.coins}\n\n【所持アイテム】\n${itemsList || 'アイテムがありません'}`)
-        .setColor('#ffd700')
-        .setThumbnail(interaction.user.displayAvatarURL())
-
-      await interaction.editReply({
-        embeds: [inventoryEmbed]
-      })
-    } else if (interaction.customId.startsWith('buy_')) {
-      const itemId = interaction.customId.split('_')[1]
-      const user = await getOrCreateUser(interaction.user.id)
-      const result = await purchaseItem(user.id, itemId)
-
-      const responseEmbed = new EmbedBuilder()
-        .setTitle(result.success ? '✅ 購入成功' : '❌ 購入失敗')
-        .setDescription(result.message)
-        .setColor(result.success ? '#00ff00' : '#ff0000')
-
-      await interaction.editReply({
-        embeds: [responseEmbed]
-      })
-    }
-  } catch (error) {
-    console.error('Button interaction error:', error)
-    await interaction.editReply({
-      content: 'エラーが発生しました。',
-      ephemeral: true
+  const { error: updateError } = await supabase
+    .from('point_wallets')
+    .update({
+      points: wallet.points + amount,
+      updated_at: new Date().toISOString()
     })
-  }
-})
+    .eq('user_id', userId)
 
-client.on('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`)
-})
+  if (updateError) throw updateError
+
+  const { error: historyError } = await supabase.from('point_transactions').insert([
+    {
+      user_id: userId,
+      amount: amount,
+      granted_by: grantedBy
+    }
+  ])
+
+  if (historyError) throw historyError
+}
+
+// メッセージハンドラーの重複防止
+const messageHandlers = new Map()
 
 client.on('messageCreate', async (message) => {
+  // 重複防止のためのチェック
+  if (messageHandlers.has(message.id)) return
+  messageHandlers.set(message.id, true)
+
+  // 5分後にメッセージIDを削除（メモリ管理）
+  setTimeout(() => messageHandlers.delete(message.id), 300000)
+
   if (message.author.bot) return
 
   if (message.content === '!shop') {
@@ -268,6 +263,100 @@ client.on('messageCreate', async (message) => {
       await message.channel.send('ショップの表示中にエラーが発生しました。')
     }
   }
+
+  if (message.content.startsWith('!addpoints')) {
+    try {
+      const allowedChannelId = process.env.ALLOWED_CHANNEL_ID
+      if (message.channel.id !== allowedChannelId) {
+        await message.reply('このコマンドは指定されたチャンネルでのみ使用できます。')
+        return
+      }
+
+      const args = message.content.split(' ')
+      if (args.length !== 3) {
+        await message.reply('使用方法: !addpoints @ユーザー 金額')
+        return
+      }
+
+      const targetUser = message.mentions.users.first()
+      if (!targetUser) {
+        await message.reply('ポイントを付与するユーザーを指定してください。')
+        return
+      }
+
+      const amount = parseInt(args[2])
+      if (isNaN(amount) || amount <= 0) {
+        await message.reply('有効な金額を指定してください。')
+        return
+      }
+
+      const user = await getOrCreateUser(targetUser.id)
+      await addPoints(user.id, amount, message.author.id)
+
+      const embed = new EmbedBuilder()
+        .setTitle('✨ ポイント付与')
+        .setDescription(`${targetUser.toString()} に ${amount} ポイントを付与しました！`)
+        .setColor('#00ff00')
+
+      await message.channel.send({
+        embeds: [embed]
+      })
+    } catch (error) {
+      console.error('Points addition error:', error)
+      await message.channel.send('ポイントの付与中にエラーが発生しました。')
+    }
+  }
+})
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return
+
+  try {
+    await interaction.deferReply({ ephemeral: true })
+
+    if (interaction.customId === 'show_inventory') {
+      const user = await getOrCreateUser(interaction.user.id)
+      const inventory = await getUserInventory(user.id)
+      const itemsList = inventory.items.map((item) => `${item.items.name}: ${item.quantity}個`).join('\n')
+
+      const inventoryEmbed = new EmbedBuilder()
+        .setTitle('🎒 インベントリ')
+        .setDescription(
+          `💰 コイン: ${inventory.coins}\n` +
+            `🏆 ポイント: ${inventory.points}\n\n` +
+            `【所持アイテム】\n${itemsList || 'アイテムがありません'}`
+        )
+        .setColor('#ffd700')
+        .setThumbnail(interaction.user.displayAvatarURL())
+
+      await interaction.editReply({
+        embeds: [inventoryEmbed]
+      })
+    } else if (interaction.customId.startsWith('buy_')) {
+      const itemId = interaction.customId.split('_')[1]
+      const user = await getOrCreateUser(interaction.user.id)
+      const result = await purchaseItem(user.id, itemId)
+
+      const responseEmbed = new EmbedBuilder()
+        .setTitle(result.success ? '✅ 購入成功' : '❌ 購入失敗')
+        .setDescription(result.message)
+        .setColor(result.success ? '#00ff00' : '#ff0000')
+
+      await interaction.editReply({
+        embeds: [responseEmbed]
+      })
+    }
+  } catch (error) {
+    console.error('Button interaction error:', error)
+    await interaction.editReply({
+      content: 'エラーが発生しました。',
+      ephemeral: true
+    })
+  }
+})
+
+client.on('ready', () => {
+  console.log(`Logged in as ${client.user.tag}`)
 })
 
 client.on('error', (error) => {
