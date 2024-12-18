@@ -49,44 +49,17 @@ async function getOrCreateUser(discordId) {
     if (userError) throw userError
     user = newUser
 
-    // ウォレット作成
     const { error: walletError } = await supabase.from('wallets').insert([{ user_id: user.id }])
     if (walletError) throw walletError
-
-    // ポイントウォレット作成
-    const { error: pointWalletError } = await supabase.from('point_wallets').insert([{ user_id: user.id }])
-    if (pointWalletError) throw pointWalletError
   }
 
   return user
 }
 
-async function getOrCreatePointWallet(userId) {
-  let { data: wallet } = await supabase.from('point_wallets').select('*').eq('user_id', userId).single()
-
-  if (!wallet) {
-    const { data: newWallet, error } = await supabase
-      .from('point_wallets')
-      .insert([{ user_id: userId, points: 0 }])
-      .select()
-      .single()
-
-    if (error) throw error
-    wallet = newWallet
-  }
-
-  return wallet
-}
-
 async function getUserInventory(userId) {
   try {
-    // コインウォレット情報を取得
     const { data: wallet } = await supabase.from('wallets').select('coins').eq('user_id', userId).single()
 
-    // ポイントウォレットを取得または作成
-    const { data: pointWallet } = await getOrCreatePointWallet(userId)
-
-    // アイテム情報を取得
     const { data: items } = await supabase
       .from('user_items')
       .select(
@@ -102,7 +75,6 @@ async function getUserInventory(userId) {
 
     return {
       coins: wallet?.coins || 0,
-      points: pointWallet?.points || 0,
       items: items || []
     }
   } catch (error) {
@@ -140,7 +112,7 @@ async function purchaseItem(userId, itemId) {
     })
 
     if (wallet.coins < item.price) {
-      return { success: false, message: 'コインが不足しています' }
+      return { success: false, message: 'FBPが不足しています' }
     }
 
     const { data: userItem } = await supabase
@@ -183,7 +155,7 @@ async function purchaseItem(userId, itemId) {
 
     return {
       success: true,
-      message: `${item.name}を購入しました！\n残りコイン: ${updatedWallet.coins}`
+      message: `${item.name}を購入しました！\n残りFBP: ${updatedWallet.coins}`
     }
   } catch (error) {
     console.error('Purchase error details:', error)
@@ -193,39 +165,43 @@ async function purchaseItem(userId, itemId) {
   }
 }
 
-async function addPoints(userId, amount, grantedBy) {
-  const { data: wallet } = await getOrCreatePointWallet(userId)
+async function addFBP(userId, amount, grantedBy) {
+  try {
+    // FBPを追加
+    const { data: wallet } = await supabase.from('wallets').select('coins').eq('user_id', userId).single()
 
-  const { error: updateError } = await supabase
-    .from('point_wallets')
-    .update({
-      points: wallet.points + amount,
-      updated_at: new Date().toISOString()
-    })
-    .eq('user_id', userId)
+    const { error: updateError } = await supabase
+      .from('wallets')
+      .update({
+        coins: wallet.coins + amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
 
-  if (updateError) throw updateError
+    if (updateError) throw updateError
 
-  const { error: historyError } = await supabase.from('point_transactions').insert([
-    {
-      user_id: userId,
-      amount: amount,
-      granted_by: grantedBy
-    }
-  ])
+    // トランザクション履歴を記録
+    const { error: transactionError } = await supabase.from('fbp_transactions').insert([
+      {
+        user_id: userId,
+        amount: amount,
+        granted_by: grantedBy
+      }
+    ])
 
-  if (historyError) throw historyError
+    if (transactionError) throw transactionError
+  } catch (error) {
+    console.error('Error in addFBP:', error)
+    throw error
+  }
 }
 
 // メッセージハンドラーの重複防止
 const messageHandlers = new Map()
 
 client.on('messageCreate', async (message) => {
-  // 重複防止のためのチェック
   if (messageHandlers.has(message.id)) return
   messageHandlers.set(message.id, true)
-
-  // 5分後にメッセージIDを削除（メモリ管理）
   setTimeout(() => messageHandlers.delete(message.id), 300000)
 
   if (message.author.bot) return
@@ -237,7 +213,7 @@ client.on('messageCreate', async (message) => {
       const shopButtons = items.map((item) =>
         new ButtonBuilder()
           .setCustomId(`buy_${item.id}`)
-          .setLabel(`${item.name} - ${item.price}コイン`)
+          .setLabel(`${item.name} - ${item.price}FBP`)
           .setStyle(ButtonStyle.Primary)
       )
 
@@ -264,7 +240,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  if (message.content.startsWith('!addpoints')) {
+  if (message.content.startsWith('!addfbp')) {
     try {
       const allowedChannelId = process.env.ALLOWED_CHANNEL_ID
       if (message.channel.id !== allowedChannelId) {
@@ -274,13 +250,13 @@ client.on('messageCreate', async (message) => {
 
       const args = message.content.split(' ')
       if (args.length !== 3) {
-        await message.reply('使用方法: !addpoints @ユーザー 金額')
+        await message.reply('使用方法: !addfbp @ユーザー 金額')
         return
       }
 
       const targetUser = message.mentions.users.first()
       if (!targetUser) {
-        await message.reply('ポイントを付与するユーザーを指定してください。')
+        await message.reply('FBPを付与するユーザーを指定してください。')
         return
       }
 
@@ -291,19 +267,19 @@ client.on('messageCreate', async (message) => {
       }
 
       const user = await getOrCreateUser(targetUser.id)
-      await addPoints(user.id, amount, message.author.id)
+      await addFBP(user.id, amount, message.author.id)
 
       const embed = new EmbedBuilder()
-        .setTitle('✨ ポイント付与')
-        .setDescription(`${targetUser.toString()} に ${amount} ポイントを付与しました！`)
+        .setTitle('✨ FBP付与')
+        .setDescription(`${targetUser.toString()} に ${amount} FBPを付与しました！`)
         .setColor('#00ff00')
 
       await message.channel.send({
         embeds: [embed]
       })
     } catch (error) {
-      console.error('Points addition error:', error)
-      await message.channel.send('ポイントの付与中にエラーが発生しました。')
+      console.error('FBP addition error:', error)
+      await message.channel.send('FBPの付与中にエラーが発生しました。')
     }
   }
 })
@@ -321,11 +297,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const inventoryEmbed = new EmbedBuilder()
         .setTitle('🎒 インベントリ')
-        .setDescription(
-          `💰 コイン: ${inventory.coins}\n` +
-            `🏆 ポイント: ${inventory.points}\n\n` +
-            `【所持アイテム】\n${itemsList || 'アイテムがありません'}`
-        )
+        .setDescription(`💰 FBP: ${inventory.coins}\n\n` + `【所持アイテム】\n${itemsList || 'アイテムがありません'}`)
         .setColor('#ffd700')
         .setThumbnail(interaction.user.displayAvatarURL())
 
