@@ -12,6 +12,19 @@ const { createClient } = require('@supabase/supabase-js')
 const path = require('path')
 require('dotenv').config()
 
+const http = require('http')
+
+// HTTPサーバーの設定
+const server = http.createServer((req, res) => {
+  res.writeHead(200)
+  res.end('Discord bot is running!')
+})
+
+const port = process.env.PORT || 3000
+server.listen(port, () => {
+  console.log(`Server is running on port ${port}`)
+})
+
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
 const client = new Client({
