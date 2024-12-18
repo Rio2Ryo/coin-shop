@@ -202,24 +202,10 @@ client.on('interactionCreate', async (interaction) => {
         .setColor('#ffd700')
         .setThumbnail(interaction.user.displayAvatarURL())
 
-      // インベントリ画像の存在確認
-      const inventoryBannerPath = path.join(__dirname, 'assets', 'inventory-banner.png')
-      const hasImage = await checkImageExists(inventoryBannerPath)
-
-      if (hasImage) {
-        const bannerAttachment = new AttachmentBuilder(inventoryBannerPath)
-        inventoryEmbed.setImage('attachment://inventory-banner.png')
-        await interaction.editReply({
-          embeds: [inventoryEmbed],
-          files: [bannerAttachment]
-        })
-      } else {
-        await interaction.editReply({
-          embeds: [inventoryEmbed]
-        })
-      }
+      await interaction.editReply({
+        embeds: [inventoryEmbed]
+      })
     } else if (interaction.customId.startsWith('buy_')) {
-      // 購入処理は変更なし
       const itemId = interaction.customId.split('_')[1]
       const user = await getOrCreateUser(interaction.user.id)
       const result = await purchaseItem(user.id, itemId)
@@ -273,24 +259,10 @@ client.on('messageCreate', async (message) => {
         .setDescription('アイテムを購入するか、インベントリを確認できます')
         .setColor('#00ff00')
 
-      // 画像の存在確認
-      const shopBannerPath = path.join(__dirname, 'assets', 'shop-banner.png')
-      const hasImage = await checkImageExists(shopBannerPath)
-
-      if (hasImage) {
-        const shopBannerAttachment = new AttachmentBuilder(shopBannerPath)
-        embed.setImage('attachment://shop-banner.png')
-        await message.channel.send({
-          embeds: [embed],
-          files: [shopBannerAttachment],
-          components: [shopRow, inventoryRow]
-        })
-      } else {
-        await message.channel.send({
-          embeds: [embed],
-          components: [shopRow, inventoryRow]
-        })
-      }
+      await message.channel.send({
+        embeds: [embed],
+        components: [shopRow, inventoryRow]
+      })
     } catch (error) {
       console.error('Shop command error:', error)
       await message.channel.send('ショップの表示中にエラーが発生しました。')
