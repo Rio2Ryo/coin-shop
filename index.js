@@ -249,6 +249,9 @@ client.on('messageCreate', async (message) => {
       }
 
       const args = message.content.split(' ')
+      console.log('Command args:', args) // デバッグ用ログ
+      console.log('Mentions:', message.mentions.users) // デバッグ用ログ
+
       if (args.length !== 3) {
         await message.reply('使用方法: !addfbp @ユーザー 金額')
         return
