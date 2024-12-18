@@ -11,6 +11,7 @@ const {
 const { createClient } = require('@supabase/supabase-js')
 const path = require('path')
 require('dotenv').config()
+const fs = require('fs').promises
 
 const http = require('http')
 
@@ -37,6 +38,15 @@ const client = new Client({
   ],
   partials: [Partials.Channel, Partials.Message]
 })
+
+async function checkImageExists(imagePath) {
+  try {
+    await fs.access(imagePath)
+    return true
+  } catch {
+    return false
+  }
+}
 
 // データベース操作の関数
 async function getOrCreateUser(discordId) {
@@ -176,15 +186,40 @@ async function purchaseItem(userId, itemId) {
 }
 
 client.on('interactionCreate', async (interaction) => {
-  // ボタンのインタラクションでない場合は無視
   if (!interaction.isButton()) return
 
   try {
-    // 応答を遅延させる（処理に時間がかかる可能性があるため）
     await interaction.deferReply({ ephemeral: true })
 
-    // 購入ボタンが押された場合
-    if (interaction.customId.startsWith('buy_')) {
+    if (interaction.customId === 'show_inventory') {
+      const user = await getOrCreateUser(interaction.user.id)
+      const inventory = await getUserInventory(user.id)
+      const itemsList = inventory.items.map((item) => `${item.items.name}: ${item.quantity}個`).join('\n')
+
+      const inventoryEmbed = new EmbedBuilder()
+        .setTitle('🎒 インベントリ')
+        .setDescription(`💰 コイン: ${inventory.coins}\n\n【所持アイテム】\n${itemsList || 'アイテムがありません'}`)
+        .setColor('#ffd700')
+        .setThumbnail(interaction.user.displayAvatarURL())
+
+      // インベントリ画像の存在確認
+      const inventoryBannerPath = path.join(__dirname, 'assets', 'inventory-banner.png')
+      const hasImage = await checkImageExists(inventoryBannerPath)
+
+      if (hasImage) {
+        const bannerAttachment = new AttachmentBuilder(inventoryBannerPath)
+        inventoryEmbed.setImage('attachment://inventory-banner.png')
+        await interaction.editReply({
+          embeds: [inventoryEmbed],
+          files: [bannerAttachment]
+        })
+      } else {
+        await interaction.editReply({
+          embeds: [inventoryEmbed]
+        })
+      }
+    } else if (interaction.customId.startsWith('buy_')) {
+      // 購入処理は変更なし
       const itemId = interaction.customId.split('_')[1]
       const user = await getOrCreateUser(interaction.user.id)
       const result = await purchaseItem(user.id, itemId)
@@ -198,51 +233,12 @@ client.on('interactionCreate', async (interaction) => {
         embeds: [responseEmbed]
       })
     }
-    // インベントリ表示ボタンが押された場合
-    else if (interaction.customId === 'show_inventory') {
-      const user = await getOrCreateUser(interaction.user.id)
-      const inventory = await getUserInventory(user.id)
-      const itemsList = inventory.items.map((item) => `${item.items.name}: ${item.quantity}個`).join('\n')
-
-      // 画像の準備（存在する場合）
-      let files = []
-      try {
-        const bannerPath = path.join(__dirname, 'assets', 'inventory-banner.png')
-        const bannerAttachment = new AttachmentBuilder(bannerPath)
-        files.push(bannerAttachment)
-      } catch (error) {
-        console.error('Banner image not found:', error)
-        // 画像がない場合は空の配列のまま続行
-      }
-
-      const inventoryEmbed = new EmbedBuilder()
-        .setColor('#ffd700')
-        .setTitle('🎒 インベントリ')
-        .setDescription(`💰 コイン: ${inventory.coins}\n\n【所持アイテム】\n${itemsList || 'アイテムがありません'}`)
-        .setThumbnail(interaction.user.displayAvatarURL())
-
-      // 画像が存在する場合のみsetImageを設定
-      if (files.length > 0) {
-        inventoryEmbed.setImage('attachment://inventory-banner.png')
-      }
-
-      await interaction.editReply({
-        embeds: [inventoryEmbed],
-        files: files // 画像があれば添付、なければ空配列
-      })
-    }
   } catch (error) {
-    console.error('Interaction error:', error)
-
-    // エラー発生時のユーザーへの通知
-    try {
-      await interaction.editReply({
-        content: 'エラーが発生しました。しばらく待ってから再度お試しください。',
-        ephemeral: true
-      })
-    } catch (e) {
-      console.error('Error while sending error message:', e)
-    }
+    console.error('Button interaction error:', error)
+    await interaction.editReply({
+      content: 'エラーが発生しました。',
+      ephemeral: true
+    })
   }
 })
 
@@ -257,7 +253,6 @@ client.on('messageCreate', async (message) => {
     try {
       const { data: items } = await supabase.from('items').select('*')
 
-      // 商品購入ボタンの作成
       const shopButtons = items.map((item) =>
         new ButtonBuilder()
           .setCustomId(`buy_${item.id}`)
@@ -265,31 +260,37 @@ client.on('messageCreate', async (message) => {
           .setStyle(ButtonStyle.Primary)
       )
 
-      // インベントリ表示ボタン
       const inventoryButton = new ButtonBuilder()
         .setCustomId('show_inventory')
         .setLabel('🎒 インベントリを表示')
         .setStyle(ButtonStyle.Secondary)
 
-      // ボタンを行に分けて配置
       const shopRow = new ActionRowBuilder().addComponents(shopButtons)
       const inventoryRow = new ActionRowBuilder().addComponents(inventoryButton)
 
-      // 画像の準備
-      const shopBannerPath = path.join(__dirname, 'assets', 'shop-banner.png')
-      const shopBannerAttachment = new AttachmentBuilder(shopBannerPath)
-
       const embed = new EmbedBuilder()
-        .setColor('#00ff00')
-        .setImage('attachment://shop-banner.png')
         .setTitle('🛍️ ショップ')
         .setDescription('アイテムを購入するか、インベントリを確認できます')
+        .setColor('#00ff00')
 
-      await message.channel.send({
-        embeds: [embed],
-        files: [shopBannerAttachment], // ここで画像を添付
-        components: [shopRow, inventoryRow]
-      })
+      // 画像の存在確認
+      const shopBannerPath = path.join(__dirname, 'assets', 'shop-banner.png')
+      const hasImage = await checkImageExists(shopBannerPath)
+
+      if (hasImage) {
+        const shopBannerAttachment = new AttachmentBuilder(shopBannerPath)
+        embed.setImage('attachment://shop-banner.png')
+        await message.channel.send({
+          embeds: [embed],
+          files: [shopBannerAttachment],
+          components: [shopRow, inventoryRow]
+        })
+      } else {
+        await message.channel.send({
+          embeds: [embed],
+          components: [shopRow, inventoryRow]
+        })
+      }
     } catch (error) {
       console.error('Shop command error:', error)
       await message.channel.send('ショップの表示中にエラーが発生しました。')
