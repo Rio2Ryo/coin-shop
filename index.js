@@ -255,8 +255,9 @@ client.on('messageCreate', async (message) => {
         return
       }
 
-      const args = message.content.split(' ')
-      console.log('Command args:', args) // デバッグ用ログ
+      // 引数の処理を改善
+      const args = message.content.split(/\s+/).filter((arg) => arg.length > 0)
+      console.log('Command args:', args) // デバッグログ
       console.log('Mentions:', message.mentions.users) // デバッグ用ログ
 
       if (args.length !== 3) {
