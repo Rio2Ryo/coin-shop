@@ -252,16 +252,14 @@ client.on('messageCreate', async (message) => {
     try {
       const inventoryButton = new ButtonBuilder()
         .setCustomId('show_inventory')
-        .setLabel('🎒 インベントリを表示')
+        .setLabel('🎒 インベントリを表示する')
         .setStyle(ButtonStyle.Secondary)
 
       const row = new ActionRowBuilder().addComponents(inventoryButton)
 
       const embed = new EmbedBuilder()
         .setTitle('🎒 インベントリ確認')
-        .setDescription(
-          'インベントリを表示して自分のポイントと所持アイテムを確認する\n「インベントリを表示する」ボタン'
-        )
+        .setDescription('インベントリを表示して自分のポイントと所持アイテムを確認する')
         .setColor('#ffd700')
 
       await message.channel.send({
