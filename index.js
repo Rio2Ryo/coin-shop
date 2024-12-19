@@ -254,7 +254,10 @@ client.on('messageCreate', async (message) => {
         return
       }
 
-      const args = message.content.split(/\s+/).filter((arg) => arg.length > 0)
+      const args = message.content
+        .trim()
+        .split(/\s+/)
+        .filter((arg) => arg.length > 0)
       console.log('Command args:', args)
 
       if (args.length !== 3) {
@@ -287,15 +290,11 @@ client.on('messageCreate', async (message) => {
       const user = await getOrCreateUser(targetUserId)
       await addFBP(user.id, amount, message.author.id)
 
-      // 付与完了メッセージの作成
-      let successMessage
-      if (mentionedUser) {
-        successMessage = `${mentionedUser.toString()} に ${amount} FBPを付与しました！`
-      } else {
-        successMessage = `ユーザーID: ${targetUserId} に ${amount} FBPを付与しました！`
-      }
-
-      const embed = new EmbedBuilder().setTitle('✨ FBP付与').setDescription(successMessage).setColor('#00ff00')
+      // メッセージを1つだけ送信するように修正
+      const embed = new EmbedBuilder()
+        .setTitle('✨ FBP付与')
+        .setDescription(`ユーザーID: ${targetUserId} に ${amount} FBPを付与しました！`)
+        .setColor('#00ff00')
 
       await message.channel.send({
         embeds: [embed]
