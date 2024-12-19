@@ -206,6 +206,14 @@ client.on('messageCreate', async (message) => {
 
   if (message.author.bot) return
 
+  // コマンドの場合は管理者権限をチェック
+  if (message.content.startsWith('!')) {
+    // 管理者でない場合は何もせずに終了
+    if (!message.member.permissions.has('Administrator')) {
+      return
+    }
+  }
+
   if (message.content === '!shop') {
     try {
       const { data: items } = await supabase.from('items').select('*')
@@ -240,20 +248,34 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  if (message.content === '!inventory') {
+    try {
+      const inventoryButton = new ButtonBuilder()
+        .setCustomId('show_inventory')
+        .setLabel('🎒 インベントリを表示')
+        .setStyle(ButtonStyle.Secondary)
+
+      const row = new ActionRowBuilder().addComponents(inventoryButton)
+
+      const embed = new EmbedBuilder()
+        .setTitle('🎒 インベントリ確認')
+        .setDescription(
+          'インベントリを表示して自分のポイントと所持アイテムを確認する\n「インベントリを表示する」ボタン'
+        )
+        .setColor('#ffd700')
+
+      await message.channel.send({
+        embeds: [embed],
+        components: [row]
+      })
+    } catch (error) {
+      console.error('Inventory command error:', error)
+      await message.channel.send('インベントリの表示中にエラーが発生しました。')
+    }
+  }
+
   if (message.content.startsWith('!addfbp')) {
     try {
-      // チャンネル制限をコメントアウト
-      // const allowedChannelId = process.env.ALLOWED_CHANNEL_ID
-      // if (message.channel.id !== allowedChannelId) {
-      //   await message.reply('このコマンドは指定されたチャンネルでのみ使用できます。')
-      //   return
-      // }
-
-      if (!message.member.permissions.has('Administrator')) {
-        await message.reply('このコマンドは管理者のみ使用できます。')
-        return
-      }
-
       const args = message.content
         .trim()
         .split(/\s+/)
@@ -269,12 +291,9 @@ client.on('messageCreate', async (message) => {
       const mentionedUser = message.mentions.users.first()
 
       if (mentionedUser) {
-        // メンションの場合
         targetUserId = mentionedUser.id
       } else {
-        // ユーザーIDの場合
         targetUserId = args[1]
-        // ユーザーIDのバリデーション（数字のみで構成されているか）
         if (!/^\d+$/.test(targetUserId)) {
           await message.reply('有効なユーザーIDまたはメンションを指定してください。')
           return
@@ -290,7 +309,6 @@ client.on('messageCreate', async (message) => {
       const user = await getOrCreateUser(targetUserId)
       await addFBP(user.id, amount, message.author.id)
 
-      // メッセージを1つだけ送信するように修正
       const embed = new EmbedBuilder()
         .setTitle('✨ FBP付与')
         .setDescription(`ユーザーID: ${targetUserId} に ${amount} FBPを付与しました！`)
