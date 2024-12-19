@@ -249,26 +249,33 @@ client.on('messageCreate', async (message) => {
       //   return
       // }
 
-      // 管理者権限チェック
       if (!message.member.permissions.has('Administrator')) {
         await message.reply('このコマンドは管理者のみ使用できます。')
         return
       }
 
-      // 引数の処理を改善
       const args = message.content.split(/\s+/).filter((arg) => arg.length > 0)
-      console.log('Command args:', args) // デバッグログ
-      console.log('Mentions:', message.mentions.users) // デバッグ用ログ
+      console.log('Command args:', args)
 
       if (args.length !== 3) {
-        await message.reply('使用方法: !addfbp @ユーザー 金額')
+        await message.reply('使用方法: !addfbp [@メンション または ユーザーID] [金額]')
         return
       }
 
-      const targetUser = message.mentions.users.first()
-      if (!targetUser) {
-        await message.reply('FBPを付与するユーザーを指定してください。')
-        return
+      let targetUserId
+      const mentionedUser = message.mentions.users.first()
+
+      if (mentionedUser) {
+        // メンションの場合
+        targetUserId = mentionedUser.id
+      } else {
+        // ユーザーIDの場合
+        targetUserId = args[1]
+        // ユーザーIDのバリデーション（数字のみで構成されているか）
+        if (!/^\d+$/.test(targetUserId)) {
+          await message.reply('有効なユーザーIDまたはメンションを指定してください。')
+          return
+        }
       }
 
       const amount = parseInt(args[2])
@@ -277,13 +284,18 @@ client.on('messageCreate', async (message) => {
         return
       }
 
-      const user = await getOrCreateUser(targetUser.id)
+      const user = await getOrCreateUser(targetUserId)
       await addFBP(user.id, amount, message.author.id)
 
-      const embed = new EmbedBuilder()
-        .setTitle('✨ FBP付与')
-        .setDescription(`${targetUser.toString()} に ${amount} FBPを付与しました！`)
-        .setColor('#00ff00')
+      // 付与完了メッセージの作成
+      let successMessage
+      if (mentionedUser) {
+        successMessage = `${mentionedUser.toString()} に ${amount} FBPを付与しました！`
+      } else {
+        successMessage = `ユーザーID: ${targetUserId} に ${amount} FBPを付与しました！`
+      }
+
+      const embed = new EmbedBuilder().setTitle('✨ FBP付与').setDescription(successMessage).setColor('#00ff00')
 
       await message.channel.send({
         embeds: [embed]
