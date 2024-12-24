@@ -248,6 +248,48 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  if (message.content.startsWith('!getfbp')) {
+    try {
+      const args = message.content
+        .trim()
+        .split(/\s+/)
+        .filter((arg) => arg.length > 0)
+
+      if (args.length !== 2) {
+        await message.reply('使用方法: !getfbp [@メンション または ユーザーID]')
+        return
+      }
+
+      let targetUserId
+      const mentionedUser = message.mentions.users.first()
+
+      if (mentionedUser) {
+        targetUserId = mentionedUser.id
+      } else {
+        targetUserId = args[1]
+        if (!/^\d+$/.test(targetUserId)) {
+          await message.reply('有効なユーザーIDまたはメンションを指定してください。')
+          return
+        }
+      }
+
+      const user = await getOrCreateUser(targetUserId)
+      const { data: wallet } = await supabase.from('wallets').select('coins').eq('user_id', user.id).single()
+
+      const embed = new EmbedBuilder()
+        .setTitle('💰 FBP残高照会')
+        .setDescription(`ユーザーID: ${targetUserId}\n残高: ${wallet.coins} FBP`)
+        .setColor('#00ff00')
+
+      await message.channel.send({
+        embeds: [embed]
+      })
+    } catch (error) {
+      console.error('FBP reference error:', error)
+      await message.channel.send('FBPの照会中にエラーが発生しました。')
+    }
+  }
+
   if (message.content === '!inventory') {
     try {
       const inventoryButton = new ButtonBuilder()
