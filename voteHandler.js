@@ -115,7 +115,7 @@ class VoteHandler {
       await message.edit({ embeds: [embed] })
 
       // 投票完了メッセージ（メッセージリンク付き）
-      await interaction.editReply(`[このメッセージ](${messageLink})に投票しました！`)
+      await interaction.editReply(`[この投稿](${messageLink})に投票しました！`)
     } catch (error) {
       console.error('Vote error:', error)
       await interaction.editReply('投票処理中にエラーが発生しました。')
