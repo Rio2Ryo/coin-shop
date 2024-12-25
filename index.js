@@ -11,6 +11,9 @@ const { createClient } = require('@supabase/supabase-js')
 const http = require('http')
 require('dotenv').config()
 
+const VoteHandler = require('./voteHandler')
+const voteHandler = new VoteHandler(supabase)
+
 // HTTPサーバーの設定
 const server = http.createServer((req, res) => {
   res.writeHead(200)
@@ -362,12 +365,21 @@ client.on('messageCreate', async (message) => {
       await message.channel.send('FBPの付与中にエラーが発生しました。')
     }
   }
+
+  // 投票機能の処理を追加
+  await voteHandler.handleMessage(message, process.env.VOTE_CHANNEL_ID)
 })
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return
 
   try {
+    // 投票ボタンの処理
+    if (interaction.customId.startsWith('vote_')) {
+      await voteHandler.handleVote(interaction)
+      return
+    }
+
     await interaction.deferReply({ ephemeral: true })
 
     if (interaction.customId === 'show_inventory') {
