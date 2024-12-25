@@ -9,9 +9,11 @@ const {
 } = require('discord.js')
 const { createClient } = require('@supabase/supabase-js')
 const http = require('http')
+const VoteHandler = require('./voteHandler')
 require('dotenv').config()
 
-const VoteHandler = require('./voteHandler')
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
+
 const voteHandler = new VoteHandler(supabase)
 
 // HTTPサーバーの設定
@@ -24,8 +26,6 @@ const port = process.env.PORT || 3000
 server.listen(port, () => {
   console.log(`Server is running on port ${port}`)
 })
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
 const client = new Client({
   intents: [
