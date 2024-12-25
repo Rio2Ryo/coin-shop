@@ -38,8 +38,6 @@ class VoteHandler {
       const initialCount = await this.getVoteCount(message.id)
 
       const embed = new EmbedBuilder()
-        .setTitle('投票')
-        .setDescription('投票券を1枚使用して投票できます')
         .setColor('#00ff00')
         .addFields({ name: '現在の投票数', value: `${initialCount}票` })
 
@@ -61,6 +59,10 @@ class VoteHandler {
     try {
       const messageId = interaction.customId.split('_')[1]
       const user = await this.getOrCreateUser(interaction.user.id)
+
+      // 投票対象のメッセージを取得
+      const targetMessage = await interaction.message.fetchReference()
+      const messageLink = `https://discord.com/channels/${interaction.guildId}/${targetMessage.channelId}/${targetMessage.id}`
 
       // ユーザーの投票券を確認
       const { data: userItems } = await this.supabase
@@ -111,7 +113,9 @@ class VoteHandler {
       })
 
       await message.edit({ embeds: [embed] })
-      await interaction.editReply('投票しました！')
+
+      // 投票完了メッセージ（メッセージリンク付き）
+      await interaction.editReply(`[このメッセージ](${messageLink})に投票しました！`)
     } catch (error) {
       console.error('Vote error:', error)
       await interaction.editReply('投票処理中にエラーが発生しました。')
