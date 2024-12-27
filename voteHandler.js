@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js')
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } = require('discord.js')
 
 class VoteHandler {
   constructor(supabase) {
@@ -22,9 +22,16 @@ class VoteHandler {
   }
 
   // メッセージを処理し、投票ボタンを追加
-  async handleMessage(message, targetChannelId) {
-    if (message.channelId !== targetChannelId) return
-    if (message.author.bot) return
+  async handleMessage(message, targetForumId) {
+    // フォーラムのスレッドかどうかをチェック
+    const isForumThread =
+      message.channel.type === ChannelType.PublicThread && message.channel.parent?.type === ChannelType.GuildForum
+
+    // 指定されたフォーラムのスレッドでない場合は処理しない
+    if (!isForumThread || message.channel.parent?.id !== targetForumId) return
+
+    // スレッドの最初のメッセージ（スレッド作成メッセージ）でない場合は処理しない
+    if (message.id !== message.channel.id) return
 
     try {
       const voteButton = new ButtonBuilder()
@@ -59,10 +66,6 @@ class VoteHandler {
     try {
       const messageId = interaction.customId.split('_')[1]
       const user = await this.getOrCreateUser(interaction.user.id)
-
-      // 投票対象のメッセージを取得
-      const targetMessage = await interaction.message.fetchReference()
-      const messageLink = `https://discord.com/channels/${interaction.guildId}/${targetMessage.channelId}/${targetMessage.id}`
 
       // ユーザーの投票券を確認
       const { data: userItems } = await this.supabase
@@ -114,8 +117,8 @@ class VoteHandler {
 
       await message.edit({ embeds: [embed] })
 
-      // 投票完了メッセージ（メッセージリンク付き）
-      await interaction.editReply(`[この投稿](${messageLink})に投票しました！`)
+      // 投票完了メッセージ
+      await interaction.editReply('投票しました！')
     } catch (error) {
       console.error('Vote error:', error)
       await interaction.editReply('投票処理中にエラーが発生しました。')
