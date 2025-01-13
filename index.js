@@ -421,21 +421,29 @@ client.on('interactionCreate', async (interaction) => {
   }
 })
 
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+  console.log('\n=== Channel Update Event Triggered ===')
+  console.log('Event Details:')
+  console.log('- Old channel name:', oldChannel.name)
+  console.log('- New channel name:', newChannel.name)
+  console.log('- Channel ID:', newChannel.id)
+  console.log('- Event Time:', new Date().toISOString())
+
+  await channelHandler.handleChannelUpdate(
+    newChannel,
+    process.env.REPORT_CHANNEL_ID,
+    process.env.NOTIFICATION_CHANNEL_ID,
+    'update',
+    oldChannel
+  )
+})
+
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`)
 })
 
 client.on('error', (error) => {
   console.error('Discord client error:', error)
-})
-
-client.on('channelUpdate', async (oldChannel, newChannel) => {
-  await channelHandler.handleChannelUpdate(
-    newChannel,
-    process.env.REPORT_CHANNEL_ID,
-    process.env.NOTIFICATION_CHANNEL_ID,
-    'update'
-  )
 })
 
 client.login(process.env.DISCORD_TOKEN)

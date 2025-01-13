@@ -4,36 +4,60 @@ class ChannelHandler {
   constructor(supabase) {
     this.supabase = supabase
     this.FBP_AMOUNT = 100
-    // 最後に処理したチャンネル名とタイムスタンプを保存
     this.lastProcessed = {
       channelName: null,
       timestamp: 0
     }
   }
 
-  async handleChannelUpdate(channel, reportChannelId, notificationChannelId, action) {
-    // デバッグ情報を追加
-    console.log('=== Channel Update Event Debug Info ===')
-    console.log('Channel ID:', channel.id)
-    console.log('Channel Name:', channel.name)
-    console.log('Parent ID:', channel.parentId)
-    console.log('Action:', action)
-    console.log('Current Timestamp:', new Date().toISOString())
-    console.log('Last Processed:', this.lastProcessed)
-    console.log('=====================================')
+  async handleChannelUpdate(channel, reportChannelId, notificationChannelId, action, oldChannel = null) {
+    // 詳細なデバッグ情報を追加
+    console.log('\n=== Channel Update Event Debug Info ===')
+    console.log('Basic Info:')
+    console.log('- Channel ID:', channel.id)
+    console.log('- Channel Name:', channel.name)
+    console.log('- Parent ID:', channel.parentId)
+    console.log('- Action:', action)
+    console.log('- Current Time:', new Date().toISOString())
 
-    // 同じチャンネル名で5秒以内の重複をチェック
+    // チャンネルの詳細情報
+    console.log('\nChannel Details:')
+    console.log('- Type:', channel.type)
+    console.log('- Position:', channel.position)
+    console.log('- Created At:', channel.createdAt)
+
+    // 前回の処理情報
+    console.log('\nLast Processing Info:')
+    console.log('- Last Processed Channel:', this.lastProcessed.channelName)
+    console.log(
+      '- Last Process Time:',
+      this.lastProcessed.timestamp ? new Date(this.lastProcessed.timestamp).toISOString() : 'Never'
+    )
+
+    // 変更前のチャンネル情報（もし利用可能な場合）
+    if (oldChannel) {
+      console.log('\nOld Channel Info:')
+      console.log('- Name:', oldChannel.name)
+      console.log('- Parent ID:', oldChannel.parentId)
+      console.log('- Position:', oldChannel.position)
+    }
+    console.log('=====================================\n')
+
+    // 同じチャンネル名で30秒以内の重複をチェック
     const now = Date.now()
-    if (channel.name === this.lastProcessed.channelName && now - this.lastProcessed.timestamp < 5000) {
-      console.log('Skipping duplicate processing:', {
-        channelName: channel.name,
-        timeSinceLastProcess: now - this.lastProcessed.timestamp + 'ms'
-      })
+    if (channel.name === this.lastProcessed.channelName && now - this.lastProcessed.timestamp < 30000) {
+      console.log('\nDuplicate Processing Prevention:')
+      console.log('- Skipping duplicate processing')
+      console.log('- Time since last process:', now - this.lastProcessed.timestamp, 'ms')
+      console.log('- Time threshold:', 30000, 'ms')
       return
     }
 
     if (channel.parentId !== reportChannelId) {
-      console.log('Parent channel ID does not match target ID')
+      console.log('\nChannel Parent Check:')
+      console.log('- Expected parent:', reportChannelId)
+      console.log('- Actual parent:', channel.parentId)
+      console.log('- Check result: Parent ID does not match')
       return
     }
 
@@ -42,7 +66,10 @@ class ChannelHandler {
     const match = channelName.match(reportCompletePattern)
 
     if (!match) {
-      console.log('Channel name does not match expected pattern')
+      console.log('\nChannel Name Pattern Check:')
+      console.log('- Pattern:', reportCompletePattern)
+      console.log('- Channel name:', channelName)
+      console.log('- Check result: Pattern does not match')
       return
     }
 
@@ -56,6 +83,9 @@ class ChannelHandler {
     const targetUsername = match[2]
 
     try {
+      console.log('\nProcessing Report:', reportNumber)
+      console.log('Target Username:', targetUsername)
+
       const guildMembers = await channel.guild.members.fetch()
       const targetMember = guildMembers.find(
         (member) => member.user.username.toLowerCase() === targetUsername.toLowerCase()
@@ -66,7 +96,6 @@ class ChannelHandler {
         return
       }
 
-      // 通知チャンネルを探す
       const notificationChannel = channel.guild.channels.cache
         .filter((ch) => ch.parentId === notificationChannelId)
         .find((ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`)
@@ -83,6 +112,10 @@ class ChannelHandler {
         return
       }
 
+      console.log('\nExecuting FBP Award:')
+      console.log('- Target User ID:', targetMember.id)
+      console.log('- FBP Amount:', this.FBP_AMOUNT)
+
       const user = await this.getOrCreateUser(targetMember.id)
       await this.addFBP(user.id, this.FBP_AMOUNT, 'SYSTEM')
 
@@ -93,6 +126,7 @@ class ChannelHandler {
         .setTimestamp()
 
       await notificationChannel.send({ embeds: [embed] })
+      console.log('FBP award and notification completed successfully')
     } catch (error) {
       console.error('Error in handleChannelUpdate:', error)
       console.error('Error details:', error.message)
