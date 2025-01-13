@@ -422,20 +422,14 @@ client.on('interactionCreate', async (interaction) => {
 })
 
 client.on('channelUpdate', async (oldChannel, newChannel) => {
-  console.log('\n=== Channel Update Event Triggered ===')
-  console.log('Event Details:')
-  console.log('- Old channel name:', oldChannel.name)
-  console.log('- New channel name:', newChannel.name)
-  console.log('- Channel ID:', newChannel.id)
-  console.log('- Event Time:', new Date().toISOString())
-
-  await channelHandler.handleChannelUpdate(
-    newChannel,
-    process.env.REPORT_CHANNEL_ID,
-    process.env.NOTIFICATION_CHANNEL_ID,
-    'update',
-    oldChannel
-  )
+  if (oldChannel.name !== newChannel.name) {
+    await channelHandler.handleChannelUpdate(
+      newChannel,
+      process.env.REPORT_CHANNEL_ID,
+      process.env.NOTIFICATION_CHANNEL_ID,
+      'update'
+    )
+  }
 })
 
 client.on('ready', () => {
