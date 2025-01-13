@@ -375,6 +375,14 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return
 
+  // 既知のボタンIDのリスト
+  const validButtonIds = ['show_inventory', ...Object.values(items || []).map((item) => `buy_${item.id}`), 'vote_']
+
+  // 未知のボタンIDは無視
+  if (!validButtonIds.some((id) => interaction.customId === id || interaction.customId.startsWith(id))) {
+    return
+  }
+
   try {
     // 投票ボタンの処理
     if (interaction.customId.startsWith('vote_')) {
