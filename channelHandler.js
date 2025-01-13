@@ -29,18 +29,22 @@ class ChannelHandler {
         return
       }
 
+      // 先にFBPを付与
+      const user = await this.getOrCreateUser(targetMember.id)
+      await this.addFBP(user.id, this.FBP_AMOUNT, 'SYSTEM')
+      console.log(`Added ${this.FBP_AMOUNT} FBP to user ${targetUsername}`)
+
+      // 通知チャンネルの検索と通知送信を試みる
       const notificationChannel = channel.guild.channels.cache
         .filter((ch) => ch.parentId === notificationChannelId)
         .find((ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`)
 
       if (!notificationChannel) {
-        console.error(`Notification channel for ${targetUsername} not found`)
+        console.error(`Notification channel for ${targetUsername} not found. FBP was still awarded.`)
         return
       }
 
-      const user = await this.getOrCreateUser(targetMember.id)
-      await this.addFBP(user.id, this.FBP_AMOUNT, 'SYSTEM')
-
+      // 通知チャンネルが見つかった場合のみ通知を送信
       const embed = new EmbedBuilder()
         .setTitle(`🎉 報告${reportNumber}完了ボーナス`)
         .setDescription(`<@${targetMember.id}>さんに${this.FBP_AMOUNT}FBPが付与されました！`)
