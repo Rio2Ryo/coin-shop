@@ -3,27 +3,22 @@ const { EmbedBuilder } = require('discord.js')
 class ChannelHandler {
   constructor(supabase) {
     this.supabase = supabase
-    this.REPORT_CHANNEL_ID = process.env.REPORT_CHANNEL_ID
-    this.NOTIFICATION_CHANNEL_ID = process.env.NOTIFICATION_CHANNEL_ID
     this.FBP_AMOUNT = 100
   }
 
-  async handleChannelUpdate(channel, action) {
-    // チャンネルが指定されたカテゴリに属していない場合は処理しない
-    if (channel.parentId !== this.REPORT_CHANNEL_ID) return
+  async handleChannelUpdate(channel, reportChannelId, notificationChannelId, action) {
+    if (channel.parentId !== reportChannelId) return
 
     const channelName = channel.name
-    // 「報告*完了-*」のパターンにマッチするか確認
     const reportCompletePattern = /^報告(.*)完了-(.*?)$/
     const match = channelName.match(reportCompletePattern)
 
     if (!match) return
 
-    const reportNumber = match[1] // 報告番号（例：'001'）
-    const targetUsername = match[2] // ユーザー名
+    const reportNumber = match[1]
+    const targetUsername = match[2]
 
     try {
-      // ユーザーIDの取得
       const guildMembers = await channel.guild.members.fetch()
       const targetMember = guildMembers.find(
         (member) => member.user.username.toLowerCase() === targetUsername.toLowerCase()
@@ -34,9 +29,17 @@ class ChannelHandler {
         return
       }
 
-      // 通知チャンネルの取得
-      const notificationChannel = channel.parent.children.cache.find(
-        (ch) => ch.name === `${targetUsername}-通知チャネル`
+      // notificationChannelIdを使用してチャンネルを探す
+      const notificationParent = channel.guild.channels.cache.get(notificationChannelId)
+      if (!notificationParent) {
+        console.error(`Notification parent channel not found for ID: ${notificationChannelId}`)
+        return
+      }
+
+      // キャッシュを更新してからチャンネルを探す
+      await notificationParent.children.fetch()
+      const notificationChannel = notificationParent.children.cache.find(
+        (ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`
       )
 
       if (!notificationChannel) {
@@ -44,13 +47,9 @@ class ChannelHandler {
         return
       }
 
-      // ユーザーの取得または作成
       const user = await this.getOrCreateUser(targetMember.id)
-
-      // FBPの付与
       await this.addFBP(user.id, this.FBP_AMOUNT, 'SYSTEM')
 
-      // 通知の送信
       const embed = new EmbedBuilder()
         .setTitle(`🎉 報告${reportNumber}完了ボーナス`)
         .setDescription(`<@${targetMember.id}>さんに${this.FBP_AMOUNT}FBPが付与されました！`)
@@ -60,6 +59,8 @@ class ChannelHandler {
       await notificationChannel.send({ embeds: [embed] })
     } catch (error) {
       console.error('Error in handleChannelUpdate:', error)
+      console.error('Error details:', error.message)
+      if (error.stack) console.error('Stack trace:', error.stack)
     }
   }
 
