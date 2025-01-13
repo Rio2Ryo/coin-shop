@@ -429,15 +429,6 @@ client.on('error', (error) => {
   console.error('Discord client error:', error)
 })
 
-client.on('channelCreate', async (channel) => {
-  await channelHandler.handleChannelUpdate(
-    channel,
-    process.env.REPORT_CHANNEL_ID,
-    process.env.NOTIFICATION_CHANNEL_ID,
-    'create'
-  )
-})
-
 client.on('channelUpdate', async (oldChannel, newChannel) => {
   await channelHandler.handleChannelUpdate(
     newChannel,
