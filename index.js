@@ -10,11 +10,13 @@ const {
 const { createClient } = require('@supabase/supabase-js')
 const http = require('http')
 const VoteHandler = require('./voteHandler')
+const ChannelHandler = require('./channelHandler')
 require('dotenv').config()
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
 const voteHandler = new VoteHandler(supabase)
+const channelHandler = new ChannelHandler(supabase)
 
 // HTTPサーバーの設定
 const server = http.createServer((req, res) => {
@@ -425,6 +427,14 @@ client.on('ready', () => {
 
 client.on('error', (error) => {
   console.error('Discord client error:', error)
+})
+
+client.on('channelCreate', async (channel) => {
+  await channelHandler.handleChannelUpdate(channel, 'create')
+})
+
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+  await channelHandler.handleChannelUpdate(newChannel, 'update')
 })
 
 client.login(process.env.DISCORD_TOKEN)
