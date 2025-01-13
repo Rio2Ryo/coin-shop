@@ -375,8 +375,12 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return
 
-  // 既知のボタンIDのリスト
-  const validButtonIds = ['show_inventory', ...Object.values(items || []).map((item) => `buy_${item.id}`), 'vote_']
+  // 既知のボタンIDのリスト（固定値として定義）
+  const validButtonIds = [
+    'show_inventory',
+    'buy_', // 購入ボタンのプレフィックス
+    'vote_' // 投票ボタンのプレフィックス
+  ]
 
   // 未知のボタンIDは無視
   if (!validButtonIds.some((id) => interaction.customId === id || interaction.customId.startsWith(id))) {
