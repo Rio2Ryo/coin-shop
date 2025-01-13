@@ -29,21 +29,21 @@ class ChannelHandler {
         return
       }
 
-      // notificationChannelIdを使用してチャンネルを探す
-      const notificationParent = channel.guild.channels.cache.get(notificationChannelId)
-      if (!notificationParent) {
-        console.error(`Notification parent channel not found for ID: ${notificationChannelId}`)
-        return
-      }
-
-      // キャッシュを更新してからチャンネルを探す
-      await notificationParent.children.fetch()
-      const notificationChannel = notificationParent.children.cache.find(
-        (ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`
-      )
+      // 全チャンネルを取得して通知チャンネルを探す
+      const notificationChannel = channel.guild.channels.cache
+        .filter((ch) => ch.parentId === notificationChannelId)
+        .find((ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`)
 
       if (!notificationChannel) {
         console.error(`Notification channel for ${targetUsername} not found`)
+        // デバッグ情報を出力
+        console.log('Looking for:', `${targetUsername.toLowerCase()}-通知チャネル`)
+        console.log(
+          'Available channels:',
+          Array.from(channel.guild.channels.cache.filter((ch) => ch.parentId === notificationChannelId).values()).map(
+            (ch) => ch.name
+          )
+        )
         return
       }
 
