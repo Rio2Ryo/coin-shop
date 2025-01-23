@@ -11,14 +11,14 @@ const { createClient } = require('@supabase/supabase-js')
 const http = require('http')
 const VoteHandler = require('./voteHandler')
 const ChannelHandler = require('./channelHandler')
-const AdminCommands = require('./adminCommands')
+const CommandHandler = require('./commandHandler')
 require('dotenv').config()
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
 const voteHandler = new VoteHandler(supabase)
 const channelHandler = new ChannelHandler(supabase)
-const adminCommands = new AdminCommands(supabase)
+const commandHandler = new CommandHandler(supabase)
 
 // HTTPサーバーの設定
 const server = http.createServer((req, res) => {
