@@ -271,6 +271,9 @@ client.on('messageCreate', async (message) => {
       case 'deleteitem':
         await commandHandler.deleteItem(message, args)
         break
+      case 'help':
+        await commandHandler.handleHelp(message)
+        break
     }
   }
 

@@ -5,6 +5,33 @@ class CommandHandler {
     this.supabase = supabase
   }
 
+  async handleHelp(message) {
+    try {
+      const embed = new EmbedBuilder()
+        .setTitle('コマンド一覧')
+        .setDescription(
+          '`!shop` - ショップを表示します\n' +
+            '`!inventory` - インベントリを表示します\n\n' +
+            '`!quests` - クエスト一覧を表示\n' +
+            '`!addquest <quest_number> <fbp_reward> <title>` - クエストを追加\n' +
+            '`!editquest <id> <quest_number> <fbp_reward> <title>` - クエストを編集\n' +
+            '`!deletequest <id>` - クエストを削除\n\n' +
+            '`!items` - アイテム一覧を表示\n' +
+            '`!additem <name> <price>` - アイテムを追加\n' +
+            '`!edititem <id> <name> <price>` - アイテムを編集\n' +
+            '`!deleteitem <id>` - アイテムを削除\n\n' +
+            '`!getfbp <@メンション または ユーザーID>` - FBP残高を確認\n' +
+            '`!addfbp <@メンション または ユーザーID> <金額>` - FBPを付与'
+        )
+        .setColor('#00ff00')
+
+      await message.channel.send({ embeds: [embed] })
+    } catch (error) {
+      console.error('Help command error:', error)
+      await message.channel.send('コマンド一覧の表示中にエラーが発生しました。')
+    }
+  }
+
   // 既存のショップコマンド
   async handleShop(message) {
     try {
