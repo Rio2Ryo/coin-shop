@@ -3,7 +3,27 @@ const { EmbedBuilder } = require('discord.js')
 class ChannelHandler {
   constructor(supabase) {
     this.supabase = supabase
-    this.FBP_AMOUNT = 100
+  }
+
+  async getQuestReward(questNumber) {
+    try {
+      const { data: quest, error } = await this.supabase
+        .from('quests')
+        .select('fbp_reward, title')
+        .eq('quest_number', questNumber.padStart(3, '0'))
+        .single()
+
+      if (error) throw error
+      if (!quest) {
+        console.error(`Quest ${questNumber} not found`)
+        return { fbpReward: 100, title: '報告完了' } // デフォルト値を返す
+      }
+
+      return { fbpReward: quest.fbp_reward, title: quest.title }
+    } catch (error) {
+      console.error('Error fetching quest reward:', error)
+      return { fbpReward: 100, title: '報告完了' } // エラー時はデフォルト値を返す
+    }
   }
 
   async handleChannelUpdate(channel, reportChannelId, notificationChannelId, action) {
@@ -29,12 +49,15 @@ class ChannelHandler {
         return
       }
 
-      // 先にFBPを付与
-      const user = await this.getOrCreateUser(targetMember.id)
-      await this.addFBP(user.id, this.FBP_AMOUNT, 'SYSTEM')
-      console.log(`Added ${this.FBP_AMOUNT} FBP to user ${targetUsername}`)
+      // クエスト報酬を取得
+      const { fbpReward, title } = await this.getQuestReward(reportNumber)
 
-      // 通知チャンネルの検索と通知送信を試みる
+      // FBPを付与
+      const user = await this.getOrCreateUser(targetMember.id)
+      await this.addFBP(user.id, fbpReward, 'SYSTEM')
+      console.log(`Added ${fbpReward} FBP to user ${targetUsername} for quest ${reportNumber}`)
+
+      // 通知チャンネルの検索と通知送信
       const notificationChannel = channel.guild.channels.cache
         .filter((ch) => ch.parentId === notificationChannelId)
         .find((ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`)
@@ -44,10 +67,10 @@ class ChannelHandler {
         return
       }
 
-      // 通知チャンネルが見つかった場合のみ通知を送信
+      // 通知メッセージの送信
       const embed = new EmbedBuilder()
         .setTitle(`🎉 報告${reportNumber}完了ボーナス`)
-        .setDescription(`<@${targetMember.id}>さんに${this.FBP_AMOUNT}FBPが付与されました！`)
+        .setDescription(`<@${targetMember.id}>さんに${fbpReward}FBPが付与されました！`)
         .setColor('#00ff00')
         .setTimestamp()
 
@@ -57,6 +80,7 @@ class ChannelHandler {
     }
   }
 
+  // 既存のgetOrCreateUserメソッドとaddFBPメソッドは変更なし
   async getOrCreateUser(discordId) {
     let { data: user } = await this.supabase.from('users').select('id, discord_id').eq('discord_id', discordId).single()
 
