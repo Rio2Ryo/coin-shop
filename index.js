@@ -11,12 +11,14 @@ const { createClient } = require('@supabase/supabase-js')
 const http = require('http')
 const VoteHandler = require('./voteHandler')
 const ChannelHandler = require('./channelHandler')
+const AdminCommands = require('./adminCommands')
 require('dotenv').config()
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
 const voteHandler = new VoteHandler(supabase)
 const channelHandler = new ChannelHandler(supabase)
+const adminCommands = new AdminCommands(supabase)
 
 // HTTPサーバーの設定
 const server = http.createServer((req, res) => {
@@ -211,6 +213,7 @@ client.on('messageCreate', async (message) => {
 
   if (message.author.bot) return
 
+  /*
   // コマンドの場合は管理者権限をチェック
   if (message.content.startsWith('!')) {
     // 管理者でない場合は何もせずに終了
@@ -218,7 +221,60 @@ client.on('messageCreate', async (message) => {
       return
     }
   }
+  */
 
+  // コマンドと管理者権限のチェック
+  if (message.content.startsWith('!')) {
+    const args = message.content.slice(1).trim().split(/\s+/)
+    const command = args.shift().toLowerCase()
+
+    // 管理者専用コマンド
+    if (!message.member.permissions.has('Administrator')) {
+      return
+    }
+
+    // コマンドの処理
+    switch (command) {
+      case 'shop':
+        await commandHandler.handleShop(message)
+        break
+      case 'getfbp':
+        await commandHandler.handleGetFBP(message, args)
+        break
+      case 'inventory':
+        await commandHandler.handleInventory(message)
+        break
+      case 'addfbp':
+        await commandHandler.handleAddFBP(message, args)
+        break
+      case 'quests':
+        await commandHandler.listQuests(message)
+        break
+      case 'addquest':
+        await commandHandler.addQuest(message, args)
+        break
+      case 'editquest':
+        await commandHandler.editQuest(message, args)
+        break
+      case 'deletequest':
+        await commandHandler.deleteQuest(message, args)
+        break
+      case 'items':
+        await commandHandler.listItems(message)
+        break
+      case 'additem':
+        await commandHandler.addItem(message, args)
+        break
+      case 'edititem':
+        await commandHandler.editItem(message, args)
+        break
+      case 'deleteitem':
+        await commandHandler.deleteItem(message, args)
+        break
+    }
+  }
+
+  /*
   if (message.content === '!shop') {
     try {
       const { data: items } = await supabase.from('items').select('*')
@@ -367,6 +423,7 @@ client.on('messageCreate', async (message) => {
       await message.channel.send('FBPの付与中にエラーが発生しました。')
     }
   }
+  */
 
   // 投票機能の処理を追加
   await voteHandler.handleMessage(message, process.env.VOTE_CHANNEL_ID)
