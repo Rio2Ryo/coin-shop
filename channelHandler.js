@@ -7,22 +7,43 @@ class ChannelHandler {
 
   async getQuestReward(questNumber) {
     try {
+      const paddedQuestNumber = questNumber.padStart(3, '0')
       const { data: quest, error } = await this.supabase
         .from('quests')
         .select('fbp_reward, title')
-        .eq('quest_number', questNumber.padStart(3, '0'))
+        .eq('quest_number', paddedQuestNumber)
         .single()
 
       if (error) throw error
+
       if (!quest) {
-        console.error(`Quest ${questNumber} not found`)
-        return { fbpReward: 100, title: '報告完了' } // デフォルト値を返す
+        console.log(`Quest ${questNumber} not found, creating new quest entry`)
+
+        const defaultQuest = {
+          quest_number: paddedQuestNumber,
+          title: '報告完了',
+          fbp_reward: 100
+        }
+
+        const { data: newQuest, error: insertError } = await this.supabase
+          .from('quests')
+          .insert([defaultQuest])
+          .select()
+          .single()
+
+        if (insertError) {
+          console.error('Error creating new quest:', insertError)
+          return { fbpReward: 100, title: '報告完了' }
+        }
+
+        console.log(`Created new quest ${paddedQuestNumber} with default reward`)
+        return { fbpReward: newQuest.fbp_reward, title: newQuest.title }
       }
 
       return { fbpReward: quest.fbp_reward, title: quest.title }
     } catch (error) {
-      console.error('Error fetching quest reward:', error)
-      return { fbpReward: 100, title: '報告完了' } // エラー時はデフォルト値を返す
+      console.error('Error in getQuestReward:', error)
+      return { fbpReward: 100, title: '報告完了' }
     }
   }
 
@@ -49,15 +70,12 @@ class ChannelHandler {
         return
       }
 
-      // クエスト報酬を取得
       const { fbpReward, title } = await this.getQuestReward(reportNumber)
 
-      // FBPを付与
       const user = await this.getOrCreateUser(targetMember.id)
       await this.addFBP(user.id, fbpReward, 'SYSTEM')
       console.log(`Added ${fbpReward} FBP to user ${targetUsername} for quest ${reportNumber}`)
 
-      // 通知チャンネルの検索と通知送信
       const notificationChannel = channel.guild.channels.cache
         .filter((ch) => ch.parentId === notificationChannelId)
         .find((ch) => ch.name.toLowerCase() === `${targetUsername.toLowerCase()}-通知チャネル`)
@@ -67,7 +85,6 @@ class ChannelHandler {
         return
       }
 
-      // 通知メッセージの送信
       const embed = new EmbedBuilder()
         .setTitle(`🎉 報告${reportNumber}完了ボーナス`)
         .setDescription(`<@${targetMember.id}>さんに${fbpReward}FBPが付与されました！`)
@@ -80,7 +97,6 @@ class ChannelHandler {
     }
   }
 
-  // 既存のgetOrCreateUserメソッドとaddFBPメソッドは変更なし
   async getOrCreateUser(discordId) {
     let { data: user } = await this.supabase.from('users').select('id, discord_id').eq('discord_id', discordId).single()
 
