@@ -21,7 +21,7 @@ class ChannelHandler {
 
         const defaultQuest = {
           quest_number: paddedQuestNumber,
-          title: '報告完了',
+          title: `クエスト${paddedQuestNumber}`,
           fbp_reward: 100
         }
 
@@ -33,7 +33,7 @@ class ChannelHandler {
 
         if (insertError) {
           console.error('Error creating new quest:', insertError)
-          return { fbpReward: 100, title: '報告完了' }
+          return { fbpReward: 100, title: `クエスト${paddedQuestNumber}` }
         }
 
         console.log(`Created new quest ${paddedQuestNumber} with default reward`)
@@ -43,7 +43,7 @@ class ChannelHandler {
       return { fbpReward: quest.fbp_reward, title: quest.title }
     } catch (error) {
       console.error('Error in getQuestReward:', error)
-      return { fbpReward: 100, title: '報告完了' }
+      return { fbpReward: 100, title: `クエスト${paddedQuestNumber}` }
     }
   }
 
